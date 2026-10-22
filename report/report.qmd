@@ -1,0 +1,86 @@
+---
+title: "report"
+author: "Megan Joseph"
+thanks: "Project repository available at: [https://github.com/meganajoseph/pca_reg_comp](https://github.com/meganajoseph/pca_reg_comp)."
+date: today
+date-format: long
+format: pdf
+bibliography: references.bib
+number-sections: true
+---
+
+# Introduction {#sec-intro}
+1) the key research question
+or knowledge gap that is addressed by the study; 
+2) the data used for this study; 
+3) the methods used to investigate the research question; and 
+4) the key findings and why they
+are important. 
+
+# Data {#sec-data}
+
+```{r}
+#| include: false
+#| warning: false
+#| message: false
+
+# load libraries
+library(xml2)
+library(dplyr)
+library(tidyr)
+library(ggpubr)
+
+# load dataset
+df <- read.delim('../data/JPR robbery.tab', header = T, sep="\t")
+ddi <- read_xml("../data/JPR robbery-ddi.xml")   # use your file's name
+xml_ns_strip(ddi)                  # removes the namespace so the paths below work
+
+vars <- xml_find_all(ddi, ".//var")
+
+data_dict <- data.frame(
+  name  = xml_attr(vars, "name"),
+  label = xml_text(xml_find_first(vars, "./labl")),
+  type  = xml_attr(xml_find_first(vars, "./varFormat"), "type")
+)
+
+# clean dataset
+df <- df %>% drop_na()
+
+y <- df$lnrobberyrate
+X <- as.matrix(df %>% select(!c(lnrobberyrate, llnrobberyrate, lngdpsq, country, name, period, year, flldummyrobbery)))
+```
+
+The dataset comes from Inequality and Violent Crime: Evidence from Data on Robbery and Violent Theft by Eric Neumayer [@data-paper] with the replication data found on Harvard Dataverse [@data]. Each row represents a country during a specific year. The variables of interest include:
+
+1. the Gini coefficient,
+2. the ratio of the top to bottom quintile of the income distribution,
+3. the log of the gross domestic product (GDP) per capita, 
+4. the growth rate of the GDP, 
+5. the unemployment rate,
+6. the urbanization rate,
+7. the female labor force participation rate,
+8. the proportion of males between the ages of 15 and 64,
+9. the Polity measure of democracy,
+10. the human rights violation scale, and
+11. the natural log of the number of robberies and violent thefts per million people which is the response in this study.
+
+The dataset is compiled from a variety of sources. The Gini coefficients come from the UN-WIDER database, and 6.6 is added to the values from expenditure rather than income [@data-paper]. The ratio fo the top to bottom quintile of the income distribution (data taken from A New Data Set Measuring Income Inequality by Deininger & Squire [@income-ineq]) is used to measure income inequality[@data-paper]. The rest of the data are from the UN and the World Bank [@data-paper].
+
+
+4) highlight any critical characteristics of the data, possibly by using visualizations or summary tables.
+
+# Methods {#sec-methods}
+1) clearly explaining the key distinctions between the univariate/multivariate methods; 
+2) explaining how you will compare the methods using your data; and 
+3) describing what you expect to see in your results (and why).
+
+# Results {#sec-results}
+The results section should describe the fitted models and the results of analysis.
+This section should include relevant tables, graphs, and quantitative results, as well as plain English explanations of all of these components, but should not include raw R output. 
+Clearly explain what the results show and interpret them in the context of your research question
+
+# Discussion {#sec-disc}
+briefly summarize your key findings, discuss potential weaknesses of your study, and 
+identify potential improvements and extensions or future areas of related research
+
+# References {#sec-ref}
