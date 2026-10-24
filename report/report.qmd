@@ -10,12 +10,11 @@ number-sections: true
 ---
 
 # Introduction {#sec-intro}
-1) the key research question
-or knowledge gap that is addressed by the study; 
-2) the data used for this study; 
-3) the methods used to investigate the research question; and 
-4) the key findings and why they
-are important. 
+
+1)  the key research question or knowledge gap that is addressed by the study;
+2)  the data used for this study;
+3)  the methods used to investigate the research question; and
+4)  the key findings and why they are important.
 
 # Data {#sec-data}
 
@@ -29,6 +28,10 @@ library(xml2)
 library(dplyr)
 library(tidyr)
 library(ggpubr)
+library(tidyverse)
+library(patchwork)
+library(ggplot2)
+
 
 # load dataset
 df <- read.delim('../data/JPR robbery.tab', header = T, sep="\t")
@@ -44,43 +47,86 @@ data_dict <- data.frame(
 )
 
 # clean dataset
-df <- df %>% drop_na()
+df_cleaned <- df %>% drop_na()
 
-y <- df$lnrobberyrate
-X <- as.matrix(df %>% select(!c(lnrobberyrate, llnrobberyrate, lngdpsq, country, name, period, year, flldummyrobbery)))
+df_cleaned <- df_cleaned %>% select(!c(llnrobberyrate, lngdpsq, country, name, period, year, flldummyrobbery, incratioalltoptobot))
+
+y <- df_cleaned$lnrobberyrate
+X <- as.matrix(df_cleaned %>% select(!c(lnrobberyrate)))
 ```
 
-The dataset comes from Inequality and Violent Crime: Evidence from Data on Robbery and Violent Theft by Eric Neumayer [@data-paper] with the replication data found on Harvard Dataverse [@data]. Each row represents a country during a specific year. The variables of interest include:
+The dataset comes from Inequality and Violent Crime: Evidence from Data on Robbery and Violent Theft by Eric Neumayer [@data-paper] with the replication data found on Harvard Dataverse [@data]. Each row represents a country during a specific year, and there are `r nrow(df)` rows. The variables of interest include:
 
-1. the Gini coefficient,
-2. the ratio of the top to bottom quintile of the income distribution,
-3. the log of the gross domestic product (GDP) per capita, 
-4. the growth rate of the GDP, 
-5. the unemployment rate,
-6. the urbanization rate,
-7. the female labor force participation rate,
-8. the proportion of males between the ages of 15 and 64,
-9. the Polity measure of democracy,
-10. the human rights violation scale, and
-11. the natural log of the number of robberies and violent thefts per million people which is the response in this study.
+1.  the Gini coefficient,
+2.  the log of the gross domestic product (GDP) per capita,
+3.  the growth rate of the GDP,
+4.  the unemployment rate,
+5.  the urbanization rate,
+6.  the female labor force participation rate,
+7.  the proportion of males between the ages of 15 and 64,
+8.  the Polity measure of democracy,
+9. the human rights violation scale, and
+10. the natural log of the number of robberies and violent thefts per million people which is the response in this study.
 
 The dataset is compiled from a variety of sources. The Gini coefficients come from the UN-WIDER database, and 6.6 is added to the values from expenditure rather than income [@data-paper]. The ratio fo the top to bottom quintile of the income distribution (data taken from A New Data Set Measuring Income Inequality by Deininger & Squire [@income-ineq]) is used to measure income inequality[@data-paper]. The rest of the data are from the UN and the World Bank [@data-paper].
 
+There are `r sum(is.na(df))` NA values in the dataset. After dropping those values, the dataset include `r nrow(df_cleaned)` rows, which is a large difference. Table 1 shows the number of NA values in each column of interest.
 
-4) highlight any critical characteristics of the data, possibly by using visualizations or summary tables.
+| Variable | Number of NA values |
+|:-----------------------------------------------|----------------------:|
+|  Gini coefficient | `r sum(is.na(df['giniwider']))` |
+| Log of the GDP per capita | `r sum(is.na(df['lngdp']))` |
+| GDP growth rate | `r sum(is.na(df['econgrowth']))` |
+| unemployment rate | `r sum(is.na(df['emtotunemimputed']))` |
+| urbanization rate | `r sum(is.na(df['urban']))` |
+| female labor force participation rate | `r sum(is.na(df['femlabourpart']))` |
+| proportion of males between the ages of 15 and 64 | `r sum(is.na(df['male1564']))` |
+| Measure of democracy | `r sum(is.na(df['politypositiveonly']))` |
+| Human rights violation scale | `r sum(is.na(df['humanrightsviol']))` |
+| Natural log of the number of robberies and violent thefts per million people | `r sum(is.na(df['lnrobberyrate']))` |
+
+: This table shows the number of NA values in the columns of each variable of interest.
+
+```{r fig-rel, fig.width=8, fig.height=7}
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-cap: "Plot (a) shows a scatter plot showing the positive relationship between the GDP (x-axis) and robbery rate (y-axis). Plot (b) shows a scatter plot showing the negative relationship between the human rights violation scale (x-axis) and robbery rate (y-axis). Plot (c) shows a scatter plot showing the near constant relationship between female labor participation (x-axis) and robbery rate (y-axis)."
+
+pos <- ggplot(data=df_cleaned, aes(x=lngdp, y=lnrobberyrate)) + 
+  geom_point(color='plum4') +
+  labs(x="GDP", y="Robbery Rate", title="Comparison of robbery rate versus GDP (a)") + 
+  theme_minimal()
+
+neg <- ggplot(data=df_cleaned, aes(x=humanrightsviol, y=lnrobberyrate)) +
+  geom_point(color='plum4') +
+  labs(x="Human Rights Violations", y="Robbery Rate", title="Comparison of robbery rate versus human\nrights violations (b)") + 
+  theme_minimal()
+
+const <- ggplot(data=df_cleaned, aes(x=femlabourpart, y=lnrobberyrate)) + 
+  geom_point(color='plum4') +
+  labs(x="Female labor participation", y="Robbery Rate", title="Comparison of robbery rate versus female labor participation (c)") + 
+  theme_minimal()
+
+(pos + neg) / const
+```
+
+Many of the variables show a positive linear relationship with robbery rate, with some more intuitive than others. Among such variables are GDP, democracy score, proportion of males aged 15-64, percent living in urban areas, and unemployment rate. @fig-rel (a) shows a scatter plot of the relationship between GDP and robbery rate. While it may seem unintuitive that richer countires would have a higher robbery rate, it could be due to the rising value of items being stolen and higher reporting of crimes [@data-paper]. The variables human rights scale and gdp growth show a negative relationship against robbery rates. This is shown in @fig-rel (b) for human rights violation scale. A constant relationship is seen for Gini coefficient and female labor participation with the latter depicted in @fig-rel (c). Both of these contrast with the original paper and may be due to dropped the NA values.
+
+4)  highlight any critical characteristics of the data, possibly by using visualizations or summary tables.
 
 # Methods {#sec-methods}
-1) clearly explaining the key distinctions between the univariate/multivariate methods; 
-2) explaining how you will compare the methods using your data; and 
-3) describing what you expect to see in your results (and why).
+
+1)  clearly explaining the key distinctions between the univariate/multivariate methods;
+2)  explaining how you will compare the methods using your data; and
+3)  describing what you expect to see in your results (and why).
 
 # Results {#sec-results}
-The results section should describe the fitted models and the results of analysis.
-This section should include relevant tables, graphs, and quantitative results, as well as plain English explanations of all of these components, but should not include raw R output. 
-Clearly explain what the results show and interpret them in the context of your research question
+
+The results section should describe the fitted models and the results of analysis. This section should include relevant tables, graphs, and quantitative results, as well as plain English explanations of all of these components, but should not include raw R output. Clearly explain what the results show and interpret them in the context of your research question
 
 # Discussion {#sec-disc}
-briefly summarize your key findings, discuss potential weaknesses of your study, and 
-identify potential improvements and extensions or future areas of related research
+
+briefly summarize your key findings, discuss potential weaknesses of your study, and identify potential improvements and extensions or future areas of related research
 
 # References {#sec-ref}
