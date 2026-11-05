@@ -23,97 +23,68 @@ number-sections: true
 #| warning: false
 #| message: false
 
-# load libraries
-library(xml2)
 library(dplyr)
 library(tidyr)
 library(ggpubr)
 library(tidyverse)
+library(readxl)
 library(patchwork)
 library(ggplot2)
 
+df <- read_excel("../data/clh_2023_tract_2_0.xlsx", sheet = "Data")
 
-# load dataset
-df <- read.delim('../data/JPR robbery.tab', header = T, sep="\t")
-ddi <- read_xml("../data/JPR robbery-ddi.xml")   # use your file's name
-xml_ns_strip(ddi)                  # removes the namespace so the paths below work
-
-vars <- xml_find_all(ddi, ".//var")
-
-data_dict <- data.frame(
-  name  = xml_attr(vars, "name"),
-  label = xml_text(xml_find_first(vars, "./labl")),
-  type  = xml_attr(xml_find_first(vars, "./varFormat"), "type")
+variables <- c(
+  "ACS_AVG_HH_SIZE", "ACS_PCT_DISABLE", "ACS_PCT_MALE", "ACS_PCT_NON_CITIZEN",
+  "ACS_PCT_ENGLISH", "ACS_PCT_HH_LIMIT_ENGLISH", "ACS_PCT_OTH_LANG",
+  "ACS_PCT_VET", "ACS_MEDIAN_AGE", "ACS_PCT_AGE_ABOVE65",
+  "ACS_PCT_AIAN", "ACS_PCT_ASIAN", "ACS_PCT_BLACK", "ACS_PCT_HISPANIC",
+  "ACS_PCT_MULT_RACE", "ACS_PCT_NHPI", "ACS_PCT_OTHER_RACE", "ACS_PCT_WHITE",
+  "ACS_PCT_CHILD_1FAM",
+  "ACS_PCT_AIAN_COMB", "ACS_PCT_ASIAN_COMB", "ACS_PCT_BLACK_COMB",
+  "ACS_PCT_NHPI_COMB", "ACS_PCT_WHITE_COMB",
+  "ACS_PCT_HH_NO_COMP_DEV", "ACS_PCT_HH_SMARTPHONE", "ACS_PCT_HH_INTERNET",
+  "ACS_PCT_HH_CELLULAR", "ACS_PCT_BACHELOR_DGR", "ACS_PCT_1UP_PERS_1ROOM",
+  "ACS_PCT_HU_SOLAR", "ACS_MEDIAN_YEAR_BUILT", "ACS_PCT_HU_NO_VEH",
+  "ACS_PCT_UNINSURED", "CRE_TOT_RISK0",
+  "ACS_PCT_DIVORCED_F", "ACS_PCT_DIVORCED_M",
+  "ACS_PCT_MARRIED_SP_AB_M", "ACS_PCT_MARRIED_SP_AB_F",
+  "ACS_PCT_MARRIED_SP_PR_F", "ACS_PCT_MARRIED_SP_PR_M",
+  "ACS_PCT_NVR_MARRIED_F", "ACS_PCT_NVR_MARRIED_M",
+  "ACS_PCT_WIDOWED_F", "ACS_PCT_WIDOWED_M", "ACS_MEDIAN_HH_INC"
 )
 
-# clean dataset
-df_cleaned <- df %>% drop_na()
-
-df_cleaned <- df_cleaned %>% select(!c(llnrobberyrate, lngdpsq, country, name, period, year, flldummyrobbery, incratioalltoptobot))
-
-y <- df_cleaned$lnrobberyrate
-X <- as.matrix(df_cleaned %>% select(!c(lnrobberyrate)))
+df_selected <- df %>%
+  select(variables) %>%
+  drop_na() 
 ```
 
-The dataset comes from Inequality and Violent Crime: Evidence from Data on Robbery and Violent Theft by Eric Neumayer [@data-paper] with the replication data found on Harvard Dataverse [@data]. Each row represents a country during a specific year, and there are `r nrow(df)` rows. The variables of interest include:
 
-1.  the Gini coefficient,
-2.  the log of the gross domestic product (GDP) per capita,
-3.  the growth rate of the GDP,
-4.  the unemployment rate,
-5.  the urbanization rate,
-6.  the female labor force participation rate,
-7.  the proportion of males between the ages of 15 and 64,
-8.  the Polity measure of democracy,
-9. the human rights violation scale, and
-10. the natural log of the number of robberies and violent thefts per million people which is the response in this study.
+The dataset comes from the Agency for Healthcare Research and Quality (AHRQ) database [@data]. They compile data from multiple sources, but the sources of interest are the American Community Survey (ACS) and Community Resilience Estimates (CRE) [@ahrq-data-doc]. The U.S. Census Bureau conducts the ACS in order to collect social, economic, housing, and demographic data across the United States [@ahrq-data-doc]. The CRE aims to capture community resilience, and variables are constructed from the ACS and Population Estimates Program (PEP) [@ahrq-data-doc]. 
 
-The dataset is compiled from a variety of sources. The Gini coefficients come from the UN-WIDER database, and 6.6 is added to the values from expenditure rather than income [@data-paper]. The ratio fo the top to bottom quintile of the income distribution (data taken from A New Data Set Measuring Income Inequality by Deininger & Squire [@income-ineq]) is used to measure income inequality[@data-paper]. The rest of the data are from the UN and the World Bank [@data-paper].
+Each row represents a census tract in the United States in 2023, and there are `r nrow(df %>% select(variables))` rows. The `r length(variables)` variables of interest can be split into categories: households, people, internet connectivity, educational attainment, housing and mobility, transportation, health insurance status, environment, and income. The households variables are average household size and percentage of limited English speaking households. Some of the people variables are percentage of population with a disability, percentage of population that is male, percentage of population who are not U.S. citizens, percentage of population ages 5 and over that only speaks English, percentage of population ages 5 and over that speak other languages, percentage of civilian population ages 18 and over consisting of veterans, median age of total population, percentage of population ages 65 and over, and the percentage of families with children that are single-parent families. The remaining people variables describe race, ethnicity, and marital status. Race is measured as the percentage of the population reporting each of the following races alone: American Indian and Alaska Native, Asian, Black or African American, Native Hawaiian and Pacific Islander, White, and some other race. Race is also measured as the percentage reporting American Indian and Alaska Native, Asian, Black or African American, Native Hawaiian and other Pacific Islander, or White in combination with one or more other races. Ethnicity and multiracial identity are captured by the percentage of the population reporting Hispanic ethnicity and the percentage reporting multiple races. Marital status is recorded separately for the female and male populations ages 15 and over, as the percentages that are divorced or separated, now married with spouse absent, now married with spouse present, never married, and now widowed. The internet connectivity variables are the percentage of households without a computing device, percentage of households with a smartphone, percentage of households with any internet subscription, and percentage of households with a cellular data plan. Educational attainment is measured by the percentage of the population ages 25 and over with a bachelor’s degree. The housing and mobility variables are the percentage of housing units with more than one occupant per room, percentage of occupied housing units with solar energy, and median year structure built of housing units. Transportation is measured by the percentage of housing units with no vehicle available. The health insurance status variable is the percentage of the population with no health insurance coverage. The environment variable is the estimated number of individuals with zero risk factors (from the Community Resilience Estimates). Finally, income is measured by median household income, in dollars adjusted for inflation to the data file year, and this is the response variable. Predictors that are correlated with income, such as enrollment in government assistance programs, were not included.
 
-There are `r sum(is.na(df))` NA values in the dataset. After dropping those values, the dataset include `r nrow(df_cleaned)` rows, which is a large difference. Table 1 shows the number of NA values in each column of interest.
-
-| Variable | Number of NA values |
-|:-----------------------------------------------|----------------------:|
-|  Gini coefficient | `r sum(is.na(df['giniwider']))` |
-| Log of the GDP per capita | `r sum(is.na(df['lngdp']))` |
-| GDP growth rate | `r sum(is.na(df['econgrowth']))` |
-| unemployment rate | `r sum(is.na(df['emtotunemimputed']))` |
-| urbanization rate | `r sum(is.na(df['urban']))` |
-| female labor force participation rate | `r sum(is.na(df['femlabourpart']))` |
-| proportion of males between the ages of 15 and 64 | `r sum(is.na(df['male1564']))` |
-| Measure of democracy | `r sum(is.na(df['politypositiveonly']))` |
-| Human rights violation scale | `r sum(is.na(df['humanrightsviol']))` |
-| Natural log of the number of robberies and violent thefts per million people | `r sum(is.na(df['lnrobberyrate']))` |
-
-: This table shows the number of NA values in the columns of each variable of interest.
-
-```{r fig-rel, fig.width=8, fig.height=7}
+```{r fig-rel, fig.width=8, fig.height=5}
 #| echo: false
 #| warning: false
 #| message: false
-#| fig-cap: "Plot (a) shows a scatter plot showing the positive relationship between the GDP (x-axis) and robbery rate (y-axis). Plot (b) shows a scatter plot showing the negative relationship between the human rights violation scale (x-axis) and robbery rate (y-axis). Plot (c) shows a scatter plot showing the near constant relationship between female labor participation (x-axis) and robbery rate (y-axis)."
+#| fig-cap: "Plot (a) shows a scatter plot showing the positive, non-linear relationship between the percentage of households with any internet subscription (x-axis) and median household income (y-axis). Plot (b) shows a scatter plot showing little relationship between the median year housing units were built in (x-axis) and median income (y-axis)."
 
-pos <- ggplot(data=df_cleaned, aes(x=lngdp, y=lnrobberyrate)) + 
+nonlin <- ggplot(data=df_selected, aes(x=ACS_PCT_HH_INTERNET, y=ACS_MEDIAN_HH_INC)) + 
   geom_point(color='plum4') +
-  labs(x="GDP", y="Robbery Rate", title="Comparison of robbery rate versus GDP (a)") + 
+  labs(x="Percentage of households with any internet subscription", y="Median income", title="Comparison of median income versus\npercentage of internet subscription (a)") + 
   theme_minimal()
 
-neg <- ggplot(data=df_cleaned, aes(x=humanrightsviol, y=lnrobberyrate)) +
+norel <- ggplot(data=df_selected, aes(x=ACS_MEDIAN_YEAR_BUILT, y=ACS_MEDIAN_HH_INC)) +
   geom_point(color='plum4') +
-  labs(x="Human Rights Violations", y="Robbery Rate", title="Comparison of robbery rate versus human\nrights violations (b)") + 
+  labs(x="Median year built of housing units", y="Median Income", title="Comparison of median income versus\nmedian year built of housing units (b)") + 
   theme_minimal()
 
-const <- ggplot(data=df_cleaned, aes(x=femlabourpart, y=lnrobberyrate)) + 
-  geom_point(color='plum4') +
-  labs(x="Female labor participation", y="Robbery Rate", title="Comparison of robbery rate versus female labor participation (c)") + 
-  theme_minimal()
-
-(pos + neg) / const
+(nonlin + norel)
 ```
 
-Many of the variables show a positive linear relationship with robbery rate, with some more intuitive than others. Among such variables are GDP, democracy score, proportion of males aged 15-64, percent living in urban areas, and unemployment rate. @fig-rel (a) shows a scatter plot of the relationship between GDP and robbery rate. While it may seem unintuitive that richer countires would have a higher robbery rate, it could be due to the rising value of items being stolen and higher reporting of crimes [@data-paper]. The variables human rights scale and gdp growth show a negative relationship against robbery rates. This is shown in @fig-rel (b) for human rights violation scale. A constant relationship is seen for Gini coefficient and female labor participation with the latter depicted in @fig-rel (c). Both of these contrast with the original paper and may be due to dropped the NA values.
+Most of the variables have what looks more like a non-linear relationship with income. For example, @fig-rel (a) shows a positive relationship between the percentage of households in a census tract with any internet subscription and the median household income. However, it looks more exponential than linear. There are also a few variables with little relationship with income. The median year housing units were built in a census tract is one such example. @fig-rel (b) shows this where the points cover the entire area in no recognizable shape. 
 
-4)  highlight any critical characteristics of the data, possibly by using visualizations or summary tables.
+There are `r sum(is.na(df %>% select(variables)))` NA values in the dataset. After dropping those values, the dataset include `r nrow(df_selected)` rows.
 
 # Methods {#sec-methods}
 
