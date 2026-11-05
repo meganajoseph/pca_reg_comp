@@ -30,6 +30,7 @@ library(tidyverse)
 library(readxl)
 library(patchwork)
 library(ggplot2)
+library(tidymodels)
 
 df <- read_excel("../data/clh_2023_tract_2_0.xlsx", sheet = "Data")
 
@@ -58,12 +59,11 @@ df_selected <- df %>%
   drop_na() 
 ```
 
-
-The dataset comes from the Agency for Healthcare Research and Quality (AHRQ) database [@data]. They compile data from multiple sources, but the sources of interest are the American Community Survey (ACS) and Community Resilience Estimates (CRE) [@ahrq-data-doc]. The U.S. Census Bureau conducts the ACS in order to collect social, economic, housing, and demographic data across the United States [@ahrq-data-doc]. The CRE aims to capture community resilience, and variables are constructed from the ACS and Population Estimates Program (PEP) [@ahrq-data-doc]. 
+The dataset comes from the Agency for Healthcare Research and Quality (AHRQ) database [@data]. They compile data from multiple sources, but the sources of interest are the American Community Survey (ACS) and Community Resilience Estimates (CRE) [@ahrq-data-doc]. The U.S. Census Bureau conducts the ACS in order to collect social, economic, housing, and demographic data across the United States [@ahrq-data-doc]. The CRE aims to capture community resilience, and variables are constructed from the ACS and Population Estimates Program (PEP) [@ahrq-data-doc].
 
 Each row represents a census tract in the United States in 2023, and there are `r nrow(df %>% select(variables))` rows. The `r length(variables)` variables of interest can be split into categories: households, people, internet connectivity, educational attainment, housing and mobility, transportation, health insurance status, environment, and income. The households variables are average household size and percentage of limited English speaking households. Some of the people variables are percentage of population with a disability, percentage of population that is male, percentage of population who are not U.S. citizens, percentage of population ages 5 and over that only speaks English, percentage of population ages 5 and over that speak other languages, percentage of civilian population ages 18 and over consisting of veterans, median age of total population, percentage of population ages 65 and over, and the percentage of families with children that are single-parent families. The remaining people variables describe race, ethnicity, and marital status. Race is measured as the percentage of the population reporting each of the following races alone: American Indian and Alaska Native, Asian, Black or African American, Native Hawaiian and Pacific Islander, White, and some other race. Race is also measured as the percentage reporting American Indian and Alaska Native, Asian, Black or African American, Native Hawaiian and other Pacific Islander, or White in combination with one or more other races. Ethnicity and multiracial identity are captured by the percentage of the population reporting Hispanic ethnicity and the percentage reporting multiple races. Marital status is recorded separately for the female and male populations ages 15 and over, as the percentages that are divorced or separated, now married with spouse absent, now married with spouse present, never married, and now widowed. The internet connectivity variables are the percentage of households without a computing device, percentage of households with a smartphone, percentage of households with any internet subscription, and percentage of households with a cellular data plan. Educational attainment is measured by the percentage of the population ages 25 and over with a bachelor’s degree. The housing and mobility variables are the percentage of housing units with more than one occupant per room, percentage of occupied housing units with solar energy, and median year structure built of housing units. Transportation is measured by the percentage of housing units with no vehicle available. The health insurance status variable is the percentage of the population with no health insurance coverage. The environment variable is the estimated number of individuals with zero risk factors (from the Community Resilience Estimates). Finally, income is measured by median household income, in dollars adjusted for inflation to the data file year, and this is the response variable. Predictors that are correlated with income, such as enrollment in government assistance programs, were not included.
 
-```{r fig-rel, fig.width=8, fig.height=5}
+```{r fig-rel, fig.width=8, fig.height=4}
 #| echo: false
 #| warning: false
 #| message: false
@@ -82,15 +82,57 @@ norel <- ggplot(data=df_selected, aes(x=ACS_MEDIAN_YEAR_BUILT, y=ACS_MEDIAN_HH_I
 (nonlin + norel)
 ```
 
-Most of the variables have what looks more like a non-linear relationship with income. For example, @fig-rel (a) shows a positive relationship between the percentage of households in a census tract with any internet subscription and the median household income. However, it looks more exponential than linear. There are also a few variables with little relationship with income. The median year housing units were built in a census tract is one such example. @fig-rel (b) shows this where the points cover the entire area in no recognizable shape. 
+Most of the variables have what looks more like a non-linear relationship with income. For example, @fig-rel (a) shows a positive relationship between the percentage of households in a census tract with any internet subscription and the median household income. However, it looks more exponential than linear. There are also a few variables with little relationship with income. The median year housing units were built in a census tract is one such example. @fig-rel (b) shows this where the points cover the entire area in no recognizable shape.
 
 There are `r sum(is.na(df %>% select(variables)))` NA values in the dataset. After dropping those values, the dataset include `r nrow(df_selected)` rows.
 
 # Methods {#sec-methods}
 
-1)  clearly explaining the key distinctions between the univariate/multivariate methods;
-2)  explaining how you will compare the methods using your data; and
-3)  describing what you expect to see in your results (and why).
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+set.seed(0)
+split <- initial_validation_split(df_selected, prop=c(0.7, 0.15))
+
+train <- training(split)
+valid <- validation(split)
+test <- testing(split)
+```
+
+## Univariate {#sec-univariate}
+
+The univariate method will be multiple linear regression with median income as the response and the rest of the variables are predictors. For simplicity, interactions will not be included, and transformations will not be applied even though they may improve performance. Let $\boldsymbol{Y}$\$\\boldsymbol{Y}\$ be the `r nrow(df_selected)` x 1 vector where each entry represents the median income in a census tract. Let $\boldsymbol{X}$ be the `r nrow(df_selected)` x `r length(variables)` matrix where the first column is the vector of ones and the rest represent one predictor. The model can be written as $$\boldsymbol{Y} = \boldsymbol{X}\beta + \boldsymbol{\varepsilon}$$ where $\beta$ is the vector of coefficients for each predictor, and $\varepsilon$ is the vector containing the error. Here, each $\beta$ represents the average change in median income in a census tract in the United States for a unit increase in the corresponding predictor.
+
+### Assumptions of Linear Regression {#sec-assump}
+
+The assumptions of using linear regression for inference are:
+
+1.  The variables used accurately reflect the quantities of interest, the model should include all predictors, and the model should be applicable for the research question.
+2.  The sample data is representative of the population of interest.
+3.  The mean function must be correct.
+4.  Errors must be independent.
+5.  The variance of the errors must be equal.
+6.  Errors must be normal.
+
+Since the goal of this analysis is prediction, it is not necessary for the assumptions to be met.
+
+## Multivariate {#sec-mv}
+
+The multivariate method will be to apply principal component analysis (PCA) to the predictors. Then, the top $k$ components that capture approximately 95% of the variance will be chosen. The $k$ loadings will be multiplied with the predictor matrix and used as the new predictors for the same regression method described previously.
+
+Suppose $V_k$ is a matrix containing the $k$ variable loadings and $X^* = XV_K$ is the matrix containing the new coordinates after projecting the data onto the $k$-dimensional space. Then, we can define the model: $$\boldsymbol{Y} = \boldsymbol{X^*}\beta + \boldsymbol{\varepsilon}$$
+
+PCA is applied in order to project the `r length(variables)-1`-dimensional data onto a $k$-dimensional space (where $k$ \< `r length(variables)-1`) that has maximum variance. Applying this method may help reduce the dimensions which may make the model more interpretable.
+
+The main difference between these two methods is what is being used as predictors in the regression model. The univariate case simply uses all of the variables as is. The PCA method uses the principal components as the predictors. Additionally, there should be less predictors in the PCA method than the univariate method since the aim is the reduce the dimensionality.
+
+## Comparing the Models {#sec-comp}
+
+To compare the models, I will first split the data into a 70% training, 15% testing, and 15% validation set. Then, I will train the models on the training set and find the root mean squared prediction error using the validation set. This is defined as $$\sqrt{E[(Y^* - \hat{Y}^*)^2]}$$ where $Y^*$ is the true median income and $\hat{Y}^*$ is the predicted median income. This is the square root of the expected squared difference between the prediction and the true value over the validation data population. The one that gives the lowest root mean squared error will be the best model. Finally, I will use the testing set to estimate the performance in order to pick the better model.
+
+I would expect that the PCA method would perform better because it selects the directions that capture the highest variance, and linear regression may be more effective when the predictors capture more of the variance in the response. However, it would not be unexpected if they performed about the same since PCA is reducing the number of dimensions which may remove important information when explaining the response.
 
 # Results {#sec-results}
 

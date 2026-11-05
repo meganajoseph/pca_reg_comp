@@ -32,24 +32,32 @@ df_selected <- df %>%
   drop_na() %>%
   mutate(across(everything(), as.numeric))
 
-model <- lm(ACS_MEDIAN_HH_INC ~ ., data=df_selected)
-summary(model)
+set.seed(0)
+library("tidymodels")
+split <- initial_validation_split(df_selected, prop=c(0.7, 0.15))
 
-X <- as.matrix(df_selected %>% 
+train <- training(split)
+valid <- validation(split)
+test <- testing(split)
+
+model_univ <- lm(ACS_MEDIAN_HH_INC ~ ., data=train)
+summary(model_univ)
+
+X_train <- as.matrix(train %>% 
   select(!c('ACS_MEDIAN_HH_INC')))
 
-pca <- prcomp(X, scale=T)
+pca <- prcomp(X_train, scale=T)
 pca$rotation
 var_explained <- pca$sdev**2 / sum(pca$sdev**2)
-ggplot(data = data.frame(x = c(1:ncol(X)), y = var_explained), 
+ggplot(data = data.frame(x = c(1:ncol(X_train)), y = var_explained), 
        mapping = aes(x = x, y = y)) + geom_line() + 
   xlab("PCs") + ylab("Variance Explained") + ggtitle("Scree Plot") +
   ylim(0, 1) +
   theme_pubr()
 
 pca_loadings <- pca$rotation[, 1:26]
-X_pca <- X %*% pca_loadings
-y <- as.matrix(df_selected %>% 
+X_pca <- X_train %*% pca_loadings
+y_train <- as.matrix(train %>% 
                  select(c('ACS_MEDIAN_HH_INC')))
-model2 <- lm(y ~ X_pca)
-summary(model2)
+model_pca <- lm(y_train ~ X_pca)
+summary(model_pca)
