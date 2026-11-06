@@ -32,6 +32,8 @@ library(patchwork)
 library(ggplot2)
 library(tidymodels)
 
+options(scipen = 999)
+
 df <- read_excel("../data/clh_2023_tract_2_0.xlsx", sheet = "Data")
 
 variables <- c(
@@ -103,7 +105,7 @@ test <- testing(split)
 
 ## Univariate {#sec-univariate}
 
-The univariate method will be multiple linear regression with median income as the response and the rest of the variables are predictors. For simplicity, interactions will not be included, and transformations will not be applied even though they may improve performance. Let $\boldsymbol{Y}$\$\\boldsymbol{Y}\$ be the `r nrow(df_selected)` x 1 vector where each entry represents the median income in a census tract. Let $\boldsymbol{X}$ be the `r nrow(df_selected)` x `r length(variables)` matrix where the first column is the vector of ones and the rest represent one predictor. The model can be written as $$\boldsymbol{Y} = \boldsymbol{X}\beta + \boldsymbol{\varepsilon}$$ where $\beta$ is the vector of coefficients for each predictor, and $\varepsilon$ is the vector containing the error. Here, each $\beta$ represents the average change in median income in a census tract in the United States for a unit increase in the corresponding predictor.
+The univariate method will be multiple linear regression with median income as the response and the rest of the variables are predictors. For simplicity, interactions will not be included, and transformations will not be applied even though they may improve performance. Let $\boldsymbol{Y}$ be the `r nrow(df_selected)` x 1 vector where each entry represents the median income in a census tract. Let $\boldsymbol{X}$ be the `r nrow(df_selected)` x `r length(variables)` matrix where the first column is the vector of ones and the rest represent one predictor. The model can be written as $$\boldsymbol{Y} = \boldsymbol{X}\beta + \boldsymbol{\varepsilon}$$ where $\beta$ is the vector of coefficients for each predictor, and $\varepsilon$ is the vector containing the error. Here, each $\beta$ represents the average change in median income in a census tract in the United States for a unit increase in the corresponding predictor while holding the other predictors constant.
 
 ### Assumptions of Linear Regression {#sec-assump}
 
@@ -126,20 +128,153 @@ Suppose $V_k$ is a matrix containing the $k$ variable loadings and $X^* = XV_K$ 
 
 PCA is applied in order to project the `r length(variables)-1`-dimensional data onto a $k$-dimensional space (where $k$ \< `r length(variables)-1`) that has maximum variance. Applying this method may help reduce the dimensions which may make the model more interpretable.
 
+A scree plot can be used to pick the number of components to use based on some requirement. I choose to pick the k components that explain at least 95% of the variance. This plot shows how much variance is explained by each component. 
+
 The main difference between these two methods is what is being used as predictors in the regression model. The univariate case simply uses all of the variables as is. The PCA method uses the principal components as the predictors. Additionally, there should be less predictors in the PCA method than the univariate method since the aim is the reduce the dimensionality.
 
 ## Comparing the Models {#sec-comp}
 
-To compare the models, I will first split the data into a 70% training, 15% testing, and 15% validation set. Then, I will train the models on the training set and find the root mean squared prediction error using the validation set. This is defined as $$\sqrt{E[(Y^* - \hat{Y}^*)^2]}$$ where $Y^*$ is the true median income and $\hat{Y}^*$ is the predicted median income. This is the square root of the expected squared difference between the prediction and the true value over the validation data population. The one that gives the lowest root mean squared error will be the best model. Finally, I will use the testing set to estimate the performance in order to pick the better model.
+To compare the models, I will first split the data into a 70% training, 15% testing, and 15% validation set. Then, I will train the models on the training set and find the root mean squared prediction error using the validation set. This is defined as $$\sqrt{E[(Y^* - \hat{Y}^*)^2]}$$ where $Y^*$ is the true median income and $\hat{Y}^*$ is the predicted median income. This is the square root of the expected squared difference between the prediction and the true value over the validation data population. The one that gives the lowest root mean squared error will be the best model. Finally, I will use the testing set to estimate the performance on the better model.
 
 I would expect that the PCA method would perform better because it selects the directions that capture the highest variance, and linear regression may be more effective when the predictors capture more of the variance in the response. However, it would not be unexpected if they performed about the same since PCA is reducing the number of dimensions which may remove important information when explaining the response.
 
+## Software
+
+I use the `lm()` function from the R programming language [@R] to create the univariate model and the PCA model. I also use the `prcomp()` function to perform PCA on the data matrix.
+
 # Results {#sec-results}
 
-The results section should describe the fitted models and the results of analysis. This section should include relevant tables, graphs, and quantitative results, as well as plain English explanations of all of these components, but should not include raw R output. Clearly explain what the results show and interpret them in the context of your research question
+```{r}
+#| include: false
+#| warning: false
+#| message: false
+
+model_univ <- lm(ACS_MEDIAN_HH_INC ~ ., data=train)
+X_valid <- valid %>% select(!c('ACS_MEDIAN_HH_INC'))
+rmspe_um <- sqrt(mean((valid$ACS_MEDIAN_HH_INC - predict(model_univ, newdata = X_valid))**2))
+
+X_train <- as.matrix(train %>% 
+                       select(!c('ACS_MEDIAN_HH_INC')))
+pca <- prcomp(X_train, scale=T)
+pca$rotation
+var_explained <- pca$sdev**2 / sum(pca$sdev**2)
+ggplot(data = data.frame(x = c(1:ncol(X_train)), y = var_explained), 
+       mapping = aes(x = x, y = y)) + geom_line() + 
+  xlab("PCs") + ylab("Variance Explained") + ggtitle("Scree Plot") +
+  ylim(0, 1) +
+  theme_pubr()
+
+pca_loadings <- pca$rotation[, 1:26]
+X_pca <- X_train %*% pca_loadings
+y_train <- as.matrix(train %>% 
+                       select(c('ACS_MEDIAN_HH_INC')))
+model_pca <- lm(y_train ~ X_pca)
+rmspe_pca <- sqrt(mean((valid$ACS_MEDIAN_HH_INC - predict(model_pca, newdata = as.data.frame(as.matrix(X_valid) %*% pca_loadings)))**2))
+
+X_test <- test %>% select(!c('ACS_MEDIAN_HH_INC'))
+rmspe_best <- sqrt(mean((test$ACS_MEDIAN_HH_INC - predict(model_univ, newdata = X_test))**2))
+
+```
+
+```{r fig-scree, fig.width=8, fig.height=4}
+#| echo: false
+#| warning: false
+#| message: false
+#| fig-cap: "This plot shows the variance explained by each component after PCA is performed on the predictor variables."
+
+var_explained <- pca$sdev**2 / sum(pca$sdev**2)
+
+ggplot(data = data.frame(x = c(1:ncol(X_train)), y = var_explained), 
+       mapping = aes(x = x, y = y)) + geom_line() + 
+  xlab("Principal Components") + ylab("Variance Explained") + ggtitle("Scree Plot") +
+  ylim(0, 1) +
+  theme_minimal()
+```
+
+The scree plot developed is shown in @fig-scree. Based on this, I chose to pick the top 26 components which reduced the model to a little over half the number of predictors compared to the univariate model. The components don't seem to explain much of the variance, with the first component not even reaching 25% of the variance.
+
+Appendix [-@sec-est] shows the slope estimate values for the univariate method and the multivariate method. The $\beta$ values can be interpreted as the average change in median income for a unit increase in the principal components, but they are not as interpretable as the univariate coefficients. The values vary between the two, even with opposite signs.
+
+The model with the lowest RMSPE is the univariate model with all of the predictors. Table 1 shows the RMSPE values for each model based on predictions from the validation set and for the better model on the testing set. 
+
+| Univariate Model RMSPE (Validation) | PCA Model RMSPE (Validation) | Final Model RMSPE (Test) |
+|------------------|------------------|------------------|
+| `r round(rmspe_um, 3)` | `r round(rmspe_pca, 3)` | `r round(rmspe_best, 3)` |
+
+: This table shows the root mean squared prediction errors on the validation set for each model and for the best model on the testing set.
+
+However, both errors are quite large which can be attributed to many reasons such as the non-linearity mentioned earlier, lack of interaction terms, and/or more intricate nuances surrounding income in a census tract. 
+
+These results show that reducing the dimensionality of a data matrix may not always be helpful in prediction. In this case, the univariate error was more than half that of the multivariate error. The principal components themselves did not explain much of the variance in the data which may also contribute to the poor performance. Applying PCA also reduced the ineterpretability of the model which may be important in certain use cases. This shows that when creating models, it's important base decisions off of theory and what we know about how the predictors are related to the response.
 
 # Discussion {#sec-disc}
 
-briefly summarize your key findings, discuss potential weaknesses of your study, and identify potential improvements and extensions or future areas of related research
+The aim of this study was to answer the following research question: How does using principal components as predictors affect predictions from a multiple regression model? I investigated this using data from the Agency for Healthcare Research and Quality. Then, I created a univariate multiple linear regression model using all of the predictors without interaction terms and another multiple regression model using the top 26 principal components as predictors. The model that predicted the best was the univariate model with a test root mean squared prediction error of `r round(rmspe_best, 3)`. 
+
+## Potential Weaknesses
+
+One weakness of this study is the lack of interaction terms. Including them may impact how much variance the principal components explained and lead to better results. They may also enhance the univariate model as well.
+
+Another weakness is that transformations should have been applied to the variables. Many of the variables appeared to have a non-linear association with median income. Applying an exponential, log, or another relevant transformation may have improved the prediction error in both models.
+
+## Possible Extensions
+
+An extension could be to address the weaknesses proposed earlier to see how they affect prediction performance. Another extension could be to perform the study at the individual level rather than at the census tract level to see if demographics can predict a person's income.
 
 # References {#sec-ref}
+
+::: {#refs}
+:::
+
+\appendix
+
+# Slope Estimates {#sec-est}
+
+| Slope Estimate | Univariate Value | PCA Value |
+|----|----|----|
+| $\hat{\beta}_0$ | `r round(coef(model_univ, s="lambda.min")[1], 3)` | `r round(coef(model_pca, s="lambda.min")[1], 3)` |
+| $\hat{\beta}_1$ | `r round(coef(model_univ, s="lambda.min")[2], 3)` | `r round(coef(model_pca, s="lambda.min")[2], 3)` |
+| $\hat{\beta}_2$ | `r round(coef(model_univ, s="lambda.min")[3], 3)` | `r round(coef(model_pca, s="lambda.min")[3], 3)` |
+| $\hat{\beta}_3$ | `r round(coef(model_univ, s="lambda.min")[4], 3)` | `r round(coef(model_pca, s="lambda.min")[4], 3)` |
+| $\hat{\beta}_4$ | `r round(coef(model_univ, s="lambda.min")[5], 3)` | `r round(coef(model_pca, s="lambda.min")[5], 3)` |
+| $\hat{\beta}_5$ | `r round(coef(model_univ, s="lambda.min")[6], 3)` | `r round(coef(model_pca, s="lambda.min")[6], 3)` |
+| $\hat{\beta}_6$ | `r round(coef(model_univ, s="lambda.min")[7], 3)` | `r round(coef(model_pca, s="lambda.min")[7], 3)` |
+| $\hat{\beta}_7$ | `r round(coef(model_univ, s="lambda.min")[8], 3)` | `r round(coef(model_pca, s="lambda.min")[8], 3)` |
+| $\hat{\beta}_8$ | `r round(coef(model_univ, s="lambda.min")[9], 3)` | `r round(coef(model_pca, s="lambda.min")[9], 3)` |
+| $\hat{\beta}_9$ | `r round(coef(model_univ, s="lambda.min")[10], 3)` | `r round(coef(model_pca, s="lambda.min")[10], 3)` |
+| $\hat{\beta}_{10}$ | `r round(coef(model_univ, s="lambda.min")[11], 3)` | `r round(coef(model_pca, s="lambda.min")[11], 3)` |
+| $\hat{\beta}_{11}$ | `r round(coef(model_univ, s="lambda.min")[12], 3)` | `r round(coef(model_pca, s="lambda.min")[12], 3)` |
+| $\hat{\beta}_{12}$ | `r round(coef(model_univ, s="lambda.min")[13], 3)` | `r round(coef(model_pca, s="lambda.min")[13], 3)` |
+| $\hat{\beta}_{13}$ | `r round(coef(model_univ, s="lambda.min")[14], 3)` | `r round(coef(model_pca, s="lambda.min")[14], 3)` |
+| $\hat{\beta}_{14}$ | `r round(coef(model_univ, s="lambda.min")[15], 3)` | `r round(coef(model_pca, s="lambda.min")[15], 3)` |
+| $\hat{\beta}_{15}$ | `r round(coef(model_univ, s="lambda.min")[16], 3)` | `r round(coef(model_pca, s="lambda.min")[16], 3)` |
+| $\hat{\beta}_{16}$ | `r round(coef(model_univ, s="lambda.min")[17], 3)` | `r round(coef(model_pca, s="lambda.min")[17], 3)` |
+| $\hat{\beta}_{17}$ | `r round(coef(model_univ, s="lambda.min")[18], 3)` | `r round(coef(model_pca, s="lambda.min")[18], 3)` |
+| $\hat{\beta}_{18}$ | `r round(coef(model_univ, s="lambda.min")[19], 3)` | `r round(coef(model_pca, s="lambda.min")[19], 3)` |
+| $\hat{\beta}_{19}$ | `r round(coef(model_univ, s="lambda.min")[20], 3)` | `r round(coef(model_pca, s="lambda.min")[20], 3)` |
+| $\hat{\beta}_{20}$ | `r round(coef(model_univ, s="lambda.min")[21], 3)` | `r round(coef(model_pca, s="lambda.min")[21], 3)` |
+| $\hat{\beta}_{21}$ | `r round(coef(model_univ, s="lambda.min")[22], 3)` | `r round(coef(model_pca, s="lambda.min")[22], 3)` |
+| $\hat{\beta}_{22}$ | `r round(coef(model_univ, s="lambda.min")[23], 3)` | `r round(coef(model_pca, s="lambda.min")[23], 3)` |
+| $\hat{\beta}_{23}$ | `r round(coef(model_univ, s="lambda.min")[24], 3)` | `r round(coef(model_pca, s="lambda.min")[24], 3)` |
+| $\hat{\beta}_{24}$ | `r round(coef(model_univ, s="lambda.min")[25], 3)` | `r round(coef(model_pca, s="lambda.min")[25], 3)` |
+| $\hat{\beta}_{25}$ | `r round(coef(model_univ, s="lambda.min")[26], 3)` | `r round(coef(model_pca, s="lambda.min")[26], 3)` |
+| $\hat{\beta}_{26}$ | `r round(coef(model_univ, s="lambda.min")[27], 3)` | `r round(coef(model_pca, s="lambda.min")[27], 3)` |
+| $\hat{\beta}_{27}$ | `r round(coef(model_univ, s="lambda.min")[28], 3)` | NA |
+| $\hat{\beta}_{28}$ | `r round(coef(model_univ, s="lambda.min")[29], 3)` | NA |
+| $\hat{\beta}_{29}$ | `r round(coef(model_univ, s="lambda.min")[30], 3)` | NA |
+| $\hat{\beta}_{30}$ | `r round(coef(model_univ, s="lambda.min")[31], 3)` | NA |
+| $\hat{\beta}_{31}$ | `r round(coef(model_univ, s="lambda.min")[32], 3)` | NA |
+| $\hat{\beta}_{32}$ | `r round(coef(model_univ, s="lambda.min")[33], 3)` | NA |
+| $\hat{\beta}_{33}$ | `r round(coef(model_univ, s="lambda.min")[34], 3)` | NA |
+| $\hat{\beta}_{34}$ | `r round(coef(model_univ, s="lambda.min")[35], 3)` | NA |
+| $\hat{\beta}_{35}$ | `r round(coef(model_univ, s="lambda.min")[36], 3)` | NA |
+| $\hat{\beta}_{36}$ | `r round(coef(model_univ, s="lambda.min")[37], 3)` | NA |
+| $\hat{\beta}_{37}$ | `r round(coef(model_univ, s="lambda.min")[38], 3)` | NA |
+| $\hat{\beta}_{38}$ | `r round(coef(model_univ, s="lambda.min")[39], 3)` | NA |
+| $\hat{\beta}_{39}$ | `r round(coef(model_univ, s="lambda.min")[40], 3)` | NA |
+| $\hat{\beta}_{40}$ | `r round(coef(model_univ, s="lambda.min")[41], 3)` | NA |
+| $\hat{\beta}_{41}$ | `r round(coef(model_univ, s="lambda.min")[42], 3)` | NA |
+| $\hat{\beta}_{42}$ | `r round(coef(model_univ, s="lambda.min")[43], 3)` | NA |
+| $\hat{\beta}_{43}$ | `r round(coef(model_univ, s="lambda.min")[44], 3)` | NA |
+| $\hat{\beta}_{44}$ | `r round(coef(model_univ, s="lambda.min")[45], 3)` | NA |
+| $\hat{\beta}_{45}$ | `r round(coef(model_univ, s="lambda.min")[46], 3)` | NA |
