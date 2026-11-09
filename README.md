@@ -6,6 +6,7 @@
 
 ## Data
 The data comes from the Agency for Healthcare Research and Quality's Community-Level Health (CLH) database. Since this is US federal government data, it's public domain. The file used is too large to store in Github but can be accessed at the site below. The data used was the 2023 census tract data.
+
 Internet Citation: Community-Level Health Database . Content last reviewed August 2026. Agency for Healthcare Research and Quality, Rockville, MD. https://www.ahrq.gov/data/innovations/clh-data.html      
 
 ## Folder Description
