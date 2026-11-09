@@ -1,5 +1,5 @@
 ---
-title: "report"
+title: "Principal Component Analysis May Not Always be Useful When Working in High Dimensions"
 author: "Megan Joseph"
 thanks: "Project repository available at: [https://github.com/meganajoseph/pca_reg_comp](https://github.com/meganajoseph/pca_reg_comp)."
 date: today
@@ -11,10 +11,13 @@ number-sections: true
 
 # Introduction {#sec-intro}
 
-1)  the key research question or knowledge gap that is addressed by the study;
-2)  the data used for this study;
-3)  the methods used to investigate the research question; and
-4)  the key findings and why they are important.
+In statistics, multivariate analysis may seem redundant. In many cases, it makes just as much sense to perform a univariate analysis alone or with some correction. For example, univariate analysis of variance (ANOVA) may give us more valuable information than multivariate ANOVA. As such, it is fitting to ask in which cases multivariate analysis is more useful than univariate analysis. In the age of "big data", being able to reduce the dimensionality of a dataset has been popular through methods such as principal component analysis (PCA) and singular value decomposition (SVD). This study, in particular, explores univariate linear regression and PCA. Specifically, I aim to answer the following research question: How are predictions affected when principal components are used as covariates instead of the data themselves?
+
+To answer this research question, I employ data from the Agency for Healthcare Research and Quality (AHRQ) database to make predictions about income using households, people, internet connectivity, educational attainment, housing and mobility, transportation, health insurance status, and environment variables as predictors. I then create a univariate multiple regression model with all of the predictors and calculate the mean squared prediction error (MSPE) on the validation and test set. A second model is created using the top 26 principal components that explained the most variance in the data matrix as predictors. The MSPE is also calculated with this model and compared to the first model.
+
+Through this, I found that the univariate case performs much better than the second model. While both models have a high MSPE, the univariate model's is more than half that of the second model. This shows that reducing the dimensionality may not always be useful and in fact make results less interpretable.
+
+The rest of the paper is structured as follows: @sec-data discusses the data, @sec-methods discusses the models, @sec-results presents the results, and @sec-disc discusses the implications of the results.
 
 # Data {#sec-data}
 
